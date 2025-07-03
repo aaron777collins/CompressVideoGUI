@@ -4,19 +4,35 @@ compress_video_gui.py
 A tiny ffmpeg front‑end for one‑click H.265 compression.
 """
 
-import sys
 import os
 import re
 import shlex
 import subprocess
+import shutil, platform, sys
 from pathlib import Path
 from datetime import timedelta
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 
-FFMPEG = "ffmpeg"     # Change if ffmpeg/ffprobe are not on PATH
-FFPROBE = "ffprobe"
+def find_tool(name: str) -> str:
+    """
+    Return an absolute path to 'ffmpeg' or 'ffprobe'.
+
+    • When the app is frozen (PyInstaller) we first look inside the
+      temporary extraction dir (sys._MEIPASS) where we will bundle
+      the binaries.
+    • Otherwise we fall back to the user's PATH.
+    """
+    if getattr(sys, 'frozen', False):
+        cand = Path(sys._MEIPASS) / (name + (".exe" if platform.system() == "Windows" else ""))
+        if cand.is_file():
+            return str(cand)
+    return shutil.which(name) or name
+
+
+FFMPEG  = find_tool("ffmpeg")
+FFPROBE = find_tool("ffprobe")
 
 
 # ---------- helper functions -------------------------------------------------

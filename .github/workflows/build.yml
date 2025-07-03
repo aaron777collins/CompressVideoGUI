@@ -2,7 +2,7 @@ name: Build desktop binaries
 
 on:
   push:
-    branches: [main]           # adjust if you use a different default branch
+    branches: [main]
   pull_request:
 
 jobs:
@@ -15,29 +15,29 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - name: Check out source
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - uses: actions/setup-python@v5
       with:
         python-version: "3.11"
 
-    - name: Install apt libs (Linux only)
-      if: runner.os == 'Linux'
-      run: sudo apt-get update && sudo apt-get install -y libxcb-xinerama0
+    # ---------- fetch static ffmpeg ----------------------------------------
+    - name: Download ffmpeg static build
+      run: |
+        python .github/workflows/get_ffmpeg.py "${{ runner.os }}"
 
-    - name: Install Python deps
+    # ---------- install deps & build ---------------------------------------
+    - name: Install build dependencies
       run: |
         python -m pip install -U pip
         pip install -r requirements.txt
 
-    - name: Build with PyInstaller
+    - name: Build single‑file exe / app
       run: |
-        pyinstaller --noconfirm --onefile --windowed compress_video_gui.spec
+        pyinstaller --noconfirm compress_video_gui_onefile.spec
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: CompressVideo-${{ runner.os }}
-        path: dist/CompressVideo*          # .exe on Windows, no suffix on Linux, .app/Contents/MacOS on macOS
+        path: dist/CompressVideo*
