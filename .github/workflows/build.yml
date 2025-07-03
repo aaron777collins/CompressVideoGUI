@@ -1,0 +1,43 @@
+name: Build desktop binaries
+
+on:
+  push:
+    branches: [main]           # adjust if you use a different default branch
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Check out source
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install apt libs (Linux only)
+      if: runner.os == 'Linux'
+      run: sudo apt-get update && sudo apt-get install -y libxcb-xinerama0
+
+    - name: Install Python deps
+      run: |
+        python -m pip install -U pip
+        pip install -r requirements.txt
+
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --noconfirm --onefile --windowed compress_video_gui.spec
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: CompressVideo-${{ runner.os }}
+        path: dist/CompressVideo*          # .exe on Windows, no suffix on Linux, .app/Contents/MacOS on macOS
