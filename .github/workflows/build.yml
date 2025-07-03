@@ -51,14 +51,13 @@ jobs:
         ls -lh dist/
 
         if [[ "${{ runner.os }}" == "Windows" ]]; then
-          cp dist/CompressVideo release/CompressVideo-win.exe
+          cp dist/CompressVideo/CompressVideo.exe release/CompressVideo-win.exe
 
         elif [[ "${{ runner.os }}" == "macOS" ]]; then
-          mv dist/CompressVideo dist/CompressVideo.app
-          ditto -c -k --sequesterRsrc --keepParent dist/CompressVideo.app release/CompressVideo-mac.zip
+          ditto -c -k --sequesterRsrc --keepParent dist/CompressVideo/CompressVideo.app release/CompressVideo-mac.zip
 
         else
-          cp dist/CompressVideo release/CompressVideo-linux
+          cp dist/CompressVideo/CompressVideo release/CompressVideo-linux
         fi
 
     - name: Upload release assets
