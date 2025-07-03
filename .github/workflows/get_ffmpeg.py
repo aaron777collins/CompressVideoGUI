@@ -1,44 +1,41 @@
 #!/usr/bin/env python3
 """
-Fetch ffmpeg + ffprobe for the given GitHub runner OS and copy them to
-externals/<os>/ so PyInstaller can bundle them.
-
-Usage from CI:
-    python get_ffmpeg.py Windows | macOS | Linux
+Download static ffmpeg + ffprobe into externals/<os>/ so PyInstaller can bundle
+them.  Called from CI with one argument (Windows | macOS | Linux).
 """
 from __future__ import annotations
 import sys, os, zipfile, tarfile, shutil, tempfile, urllib.request, pathlib, stat
 
-TARGET = sys.argv[1]   # GitHub runner OS string
+TARGET = sys.argv[1]           # runner OS
+DEST = pathlib.Path(f"externals/{TARGET.lower()}")  # windows / macos / linux
+DEST.mkdir(parents=True, exist_ok=True)
 
-# ---------------------------------------------------------------------------
-def save_to_dest(stream, dest_dir: pathlib.Path, name: str):
-    dest = dest_dir / name
-    with open(dest, "wb") as f:
+# --------------------------------------------------------------------------
+def save(stream, filename: str):
+    out = DEST / filename
+    with open(out, "wb") as f:
         shutil.copyfileobj(stream, f)
-    dest.chmod(dest.stat().st_mode | stat.S_IEXEC)  # add +x
+    out.chmod(out.stat().st_mode | stat.S_IEXEC)     # add +x even on macOS
 
-# ---------------------------------------------------------------------------
+def want(path: str, names: list[str]) -> bool:
+    return pathlib.Path(path).name in names
+# --------------------------------------------------------------------------
+
 if TARGET == "Windows":
-    URLS = ["https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"]
-    BIN_NAMES = ["ffmpeg.exe", "ffprobe.exe"]
-    DEST = pathlib.Path("externals/windows")
+    ZIP_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+    NAMES   = ["ffmpeg.exe", "ffprobe.exe"]
+    urls    = [ZIP_URL]
 
 elif TARGET == "macOS":
-    # Two separate ZIPs: one for ffmpeg, one for ffprobe
-    URLS = [
-        "https://evermeet.cx/ffmpeg/getrelease/zip",
-        "https://evermeet.cx/ffprobe/getrelease/zip",
-    ]
-    BIN_NAMES = ["ffmpeg", "ffprobe"]
-    DEST = pathlib.Path("externals/macos")
+    # Use version‑pinned universal builds so ffprobe is guaranteed to exist.
+    BASE = "https://evermeet.cx/ffmpeg"
+    VERSION = "120072-g11d1b71c31"
+    urls  = [f"{BASE}/ffmpeg-{VERSION}.zip", f"{BASE}/ffprobe-{VERSION}.zip"]
+    NAMES = ["ffmpeg", "ffprobe"]
 
 elif TARGET == "Linux":
-    # Use distro ffmpeg already installed via apt and copy it.
-    BIN_NAMES = ["ffmpeg", "ffprobe"]
-    DEST = pathlib.Path("externals/linux")
-    DEST.mkdir(parents=True, exist_ok=True)
-    for tool in BIN_NAMES:
+    # CI installs distro ffmpeg; copy it instead of downloading.
+    for tool in ["ffmpeg", "ffprobe"]:
         src = shutil.which(tool)
         if not src:
             sys.exit(f"{tool} not found on Linux runner")
@@ -50,16 +47,11 @@ elif TARGET == "Linux":
 else:
     sys.exit(f"Unknown target '{TARGET}'")
 
-# ---------------- download & extract ---------------------------------------
-DEST.mkdir(parents=True, exist_ok=True)
-print(f"Fetching static build(s) for {TARGET} ...")
+print(f"Fetching static {NAMES} for {TARGET} ...")
 
-def want(path: str) -> bool:
-    return pathlib.Path(path).name in BIN_NAMES
-
-for url in URLS:
-    fd, tmp_path = tempfile.mkstemp()
-    os.close(fd)
+for url in urls:
+    tmp_fd, tmp_path = tempfile.mkstemp()
+    os.close(tmp_fd)
     urllib.request.urlretrieve(url, tmp_path)
 
     if zipfile.is_zipfile(tmp_path):
@@ -67,17 +59,15 @@ for url in URLS:
             for info in z.infolist():
                 if info.is_dir():
                     continue
-                if want(info.filename):
+                if want(info.filename, NAMES):
                     with z.open(info) as src:
-                        save_to_dest(src, DEST, pathlib.Path(info.filename).name)
-    else:
+                        save(src, pathlib.Path(info.filename).name)
+    else:                                  # tarball (Windows never hits this)
         with tarfile.open(tmp_path) as t:
             for member in t.getmembers():
-                if not member.isfile():
-                    continue
-                if want(member.name):
+                if member.isfile() and want(member.name, NAMES):
                     with t.extractfile(member) as src:
-                        save_to_dest(src, DEST, pathlib.Path(member.name).name)
+                        save(src, pathlib.Path(member.name).name)
 
     os.remove(tmp_path)
 
