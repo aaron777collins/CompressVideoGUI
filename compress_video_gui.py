@@ -47,8 +47,11 @@ def probe_duration(path: Path) -> float | None:
     cmd = [FFPROBE, "-v", "error", "-select_streams", "v:0",
            "-show_entries", "format=duration", "-of",
            "default=noprint_wrappers=1:nokey=1", str(path)]
+    creationflags = 0
+    if platform.system() == "Windows":
+        creationflags = subprocess.CREATE_NO_WINDOW
     try:
-        out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL).strip()
+        out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL, creationflags=creationflags).strip()
         return float(out)
     except (subprocess.CalledProcessError, ValueError, FileNotFoundError):
         return None
