@@ -47,15 +47,18 @@ jobs:
       shell: bash
       run: |
         mkdir -p release
-        pwd
-        ls
-        ls dist
+        echo "Contents of dist/:"
+        ls -lh dist/
+
         if [[ "${{ runner.os }}" == "Windows" ]]; then
-          mv dist/CompressVideo.exe release/CompressVideo-win.exe
+          cp dist/CompressVideo release/CompressVideo-win.exe
+
         elif [[ "${{ runner.os }}" == "macOS" ]]; then
+          mv dist/CompressVideo dist/CompressVideo.app
           ditto -c -k --sequesterRsrc --keepParent dist/CompressVideo.app release/CompressVideo-mac.zip
+
         else
-          mv dist/CompressVideo release/CompressVideo-linux
+          cp dist/CompressVideo release/CompressVideo-linux
         fi
 
     - name: Upload release assets
