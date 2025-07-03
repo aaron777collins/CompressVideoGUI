@@ -39,9 +39,28 @@ jobs:
         python -m pip install -U pip
         pip install -r requirements.txt
 
-    - name: Build single‑file exe / app
+    - name: Build with PyInstaller
+      shell: bash
       run: |
-        pyinstaller --noconfirm --onefile compress_video_gui_onefile.spec
+        mkdir -p dist
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          pyinstaller compress_video_gui.py \
+            --noconfirm --onefile --windowed \
+            --add-binary "externals/windows/ffmpeg.exe;." \
+            --add-binary "externals/windows/ffprobe.exe;."
+
+        elif [[ "${{ runner.os }}" == "macOS" ]]; then
+          pyinstaller compress_video_gui.py \
+            --noconfirm --onefile --windowed \
+            --add-binary "externals/macos/ffmpeg:." \
+            --add-binary "externals/macos/ffprobe:."
+
+        else
+          pyinstaller compress_video_gui.py \
+            --noconfirm --onefile --windowed \
+            --add-binary "externals/linux/ffmpeg:." \
+            --add-binary "externals/linux/ffprobe:."
+        fi
 
     - name: Rename output binary
       shell: bash
@@ -49,22 +68,18 @@ jobs:
         mkdir -p release
         echo "Contents of dist/:"
         ls -lh dist/
-        echo "Contexts of dist/CompressVideo"
-        ls -lh dist/CompressVideo/
 
         if [[ "${{ runner.os }}" == "Windows" ]]; then
-          cp dist/CompressVideo/CompressVideo.exe release/CompressVideo-win.exe
+          cp dist/CompressVideo.exe release/CompressVideo-win.exe
 
         elif [[ "${{ runner.os }}" == "macOS" ]]; then
-          mv dist/CompressVideo/CompressVideo dist/CompressVideo/CompressVideo.app
-          ditto -c -k --sequesterRsrc --keepParent dist/CompressVideo/CompressVideo.app release/CompressVideo-mac.zip
+          mv dist/CompressVideo dist/CompressVideo.app
+          ditto -c -k --sequesterRsrc --keepParent dist/CompressVideo.app release/CompressVideo-mac.zip
 
         else
-          cp dist/CompressVideo/CompressVideo release/CompressVideo-linux
+          cp dist/CompressVideo release/CompressVideo-linux
         fi
 
     - name: Upload release assets
       if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v2
-      with:
-        files: release/*
+      uses: softp
