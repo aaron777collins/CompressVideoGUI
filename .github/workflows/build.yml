@@ -1,0 +1,62 @@
+name: Build desktop binaries
+
+on:
+  push:
+    tags: ['v*.*.*']     # Only create release when pushing version tag like v1.0.0
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install apt libs (Linux only)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libxcb-xinerama0 ffmpeg
+
+    - name: Download ffmpeg static build
+      run: |
+        python .github/workflows/get_ffmpeg.py "${{ runner.os }}"
+
+    - name: Install build dependencies
+      run: |
+        python -m pip install -U pip
+        pip install -r requirements.txt
+
+    - name: Build single‑file exe / app
+      run: |
+        pyinstaller --noconfirm compress_video_gui_onefile.spec
+
+    - name: Rename output binary
+      shell: bash
+      run: |
+        mkdir -p release
+        if [[ "${{ runner.os }}" == "Windows" ]]; then
+          mv dist/CompressVideo.exe release/CompressVideo-win.exe
+        elif [[ "${{ runner.os }}" == "macOS" ]]; then
+          ditto -c -k --sequesterRsrc --keepParent dist/CompressVideo.app release/CompressVideo-mac.zip
+        else
+          mv dist/CompressVideo release/CompressVideo-linux
+        fi
+
+    - name: Upload release assets
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: release/*
