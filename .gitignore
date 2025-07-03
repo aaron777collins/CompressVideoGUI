@@ -208,3 +208,6 @@ __marimo__/
 
 .github/workflows/externals
 externals
+
+compress_video_gui.spec
+release
