@@ -1,71 +1,78 @@
 #!/usr/bin/env python3
 """
-Download a recent static ffmpeg + ffprobe for the given GitHub runner OS and
-place them under externals/<platform>/ so PyInstaller can bundle them.
+Fetch ffmpeg + ffprobe for the given OS and copy them to externals/<os>/.
 
-Called from the workflow step as:
-    python get_ffmpeg.py Windows   | macOS | Linux
+Called from CI like:
+    python get_ffmpeg.py Windows | macOS | Linux
 """
 from __future__ import annotations
-import sys, os, zipfile, tarfile, shutil, tempfile, urllib.request, pathlib, stat
+import sys, os, zipfile, tarfile, shutil, tempfile, urllib.request, pathlib, stat, subprocess
 
-# ---------------------------------------------------------------------------
-TARGET = sys.argv[1]  # "Windows" | "macOS" | "Linux"
+TARGET = sys.argv[1]   # GitHub runner OS
 
+# ---------------- choose download source -----------------------------------
 if TARGET == "Windows":
     URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
     BIN_NAMES = ["ffmpeg.exe", "ffprobe.exe"]
     DEST = pathlib.Path("externals/windows")
+
 elif TARGET == "macOS":
-    URL = "https://evermeet.cx/ffmpeg/getrelease/zip"
+    URL = "https://evermeet.cx/ffmpeg/getrelease/zip"   # returns a ZIP without '.zip' ext
     BIN_NAMES = ["ffmpeg", "ffprobe"]
     DEST = pathlib.Path("externals/macos")
+
 elif TARGET == "Linux":
-    URL = "https://johnvansickle.com/ffmpeg/old-releases/ffmpeg-6.1-amd64-static.tar.xz"
+    # We already install the distro ffmpeg in the workflow, so just copy it.
     BIN_NAMES = ["ffmpeg", "ffprobe"]
     DEST = pathlib.Path("externals/linux")
+    DEST.mkdir(parents=True, exist_ok=True)
+
+    for tool in BIN_NAMES:
+        src = shutil.which(tool)
+        if not src:                 # defensive: should not happen
+            sys.exit(f"{tool} not found on Linux runner")
+        shutil.copy(src, DEST / tool)
+        os.chmod(DEST / tool, 0o755)
+
+    print(f"Copied system ffmpeg/ffprobe -> {DEST}")
+    sys.exit(0)
+
 else:
     sys.exit(f"Unknown target '{TARGET}'")
 
 DEST.mkdir(parents=True, exist_ok=True)
 print(f"Fetching static build for {TARGET} ...")
 
-# ---------------------------------------------------------------------------
-
-fd, tmp_archive = tempfile.mkstemp(suffix=URL.rsplit("/", 1)[-1])
+# ---------------- download & unpack ----------------------------------------
+fd, tmp_path = tempfile.mkstemp()
 os.close(fd)
-urllib.request.urlretrieve(URL, tmp_archive)
+urllib.request.urlretrieve(URL, tmp_path)
 
-def wants(file_path: str) -> bool:
-    """Return True if the basename matches one of BIN_NAMES."""
-    return pathlib.Path(file_path).name in BIN_NAMES
+def want(path: str) -> bool:
+    return pathlib.Path(path).name in BIN_NAMES
 
-def save_to_dest(stream, name: str) -> None:
-    out_path = DEST / name
-    with open(out_path, "wb") as dst:
+def save(stream, name: str):
+    out = DEST / name
+    with open(out, "wb") as dst:
         shutil.copyfileobj(stream, dst)
-    # make executable (best‑effort on Windows)
-    try:
-        os.chmod(out_path, os.stat(out_path).st_mode | stat.S_IEXEC)
-    except OSError:
-        pass
+    out.chmod(out.stat().st_mode | stat.S_IEXEC)
 
-if tmp_archive.endswith(".zip"):
-    with zipfile.ZipFile(tmp_archive) as z:
-        for member in z.infolist():
-            if member.is_dir():
+if zipfile.is_zipfile(tmp_path):
+    with zipfile.ZipFile(tmp_path) as zf:
+        for info in zf.infolist():
+            if info.is_dir():
                 continue
-            if wants(member.filename):
-                with z.open(member) as src:
-                    save_to_dest(src, pathlib.Path(member.filename).name)
-else:  # tar.*
-    with tarfile.open(tmp_archive) as t:
-        for member in t.getmembers():
+            if want(info.filename):
+                with zf.open(info) as src:
+                    save(src, pathlib.Path(info.filename).name)
+else:
+    with tarfile.open(tmp_path) as tf:
+        for member in tf.getmembers():
             if not member.isfile():
                 continue
-            if wants(member.name):
-                with t.extractfile(member) as src:
-                    save_to_dest(src, pathlib.Path(member.name).name)
+            if want(member.name):
+                with tf.extractfile(member) as src:
+                    save(src, pathlib.Path(member.name).name)
 
-os.remove(tmp_archive)
+os.remove(tmp_path)
 print(f"ffmpeg + ffprobe saved to {DEST}")

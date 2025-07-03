@@ -1,10 +1,10 @@
-# compress_video_gui_onefile.spec
+# -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_submodules
 import platform
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_submodules
 block_cipher = None
 
-# --- decide which static ffmpeg build to add --------------------------------
+# -------- bundle our pre‑fetched ffmpeg binaries ---------------------------
 bins = []
 plat = platform.system()
 if plat == "Windows":
@@ -17,7 +17,7 @@ else:  # Linux
     bins += [(str(Path("externals/linux/ffmpeg")),  "."),
              (str(Path("externals/linux/ffprobe")), ".")]
 
-# --- analysis ---------------------------------------------------------------
+# -------- normal build chain ----------------------------------------------
 a = Analysis(
     ["compress_video_gui.py"],
     pathex=[],
@@ -37,15 +37,19 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="CompressVideo",
-    console=False,         # GUI only
+    console=False,
     icon=None,
+    onefile=True,        # <- produces *single* self‑extracting file
 )
 
-# -- ONE‑FILE bundle ---------------------------------------------------------
-app = PKG(
+# NOTE: keep COLLECT; PyInstaller still generates it for one‑file specs.
+coll = COLLECT(
     exe,
     a.binaries,
     a.zipfiles,
     a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
     name="CompressVideo",
 )
