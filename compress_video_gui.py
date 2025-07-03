@@ -178,7 +178,7 @@ class MainWindow(QtWidgets.QWidget):
             self.in_edit.setText(path)
             # auto‑suggest output file in same folder
             if not self.out_edit.text():
-                out_path = Path(path).with_stem(Path(path).stem + "_h265")
+                out_path = Path(path).with_stem(Path(path).stem + "_compressed")
                 self.out_edit.setText(str(out_path))
 
     def select_outfile(self):
