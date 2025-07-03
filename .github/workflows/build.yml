@@ -49,11 +49,14 @@ jobs:
         mkdir -p release
         echo "Contents of dist/:"
         ls -lh dist/
+        echo "Contexts of dist/CompressVideo"
+        ls -lh dist/CompressVideo/
 
         if [[ "${{ runner.os }}" == "Windows" ]]; then
           cp dist/CompressVideo/CompressVideo.exe release/CompressVideo-win.exe
 
         elif [[ "${{ runner.os }}" == "macOS" ]]; then
+          mv dist/CompressVideo/CompressVideo dist/CompressVideo/CompressVideo.app
           ditto -c -k --sequesterRsrc --keepParent dist/CompressVideo/CompressVideo.app release/CompressVideo-mac.zip
 
         else
