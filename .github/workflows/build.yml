@@ -41,7 +41,7 @@ jobs:
 
     - name: Build single‑file exe / app
       run: |
-        pyinstaller --noconfirm compress_video_gui_onefile.spec
+        pyinstaller --noconfirm --onefile compress_video_gui_onefile.spec
 
     - name: Rename output binary
       shell: bash
