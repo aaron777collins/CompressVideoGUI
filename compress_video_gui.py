@@ -69,6 +69,9 @@ class EncodeWorker(QtCore.QThread):
 
     def run(self) -> None:
         total = probe_duration(Path(self.infile))
+        creationflags = 0
+        if platform.system() == "Windows":
+            creationflags = subprocess.CREATE_NO_WINDOW
         cmd = [FFMPEG, "-y", "-i", self.infile,
                "-vcodec", "libx265", "-crf", str(self.crf),
                self.outfile]
@@ -77,7 +80,8 @@ class EncodeWorker(QtCore.QThread):
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,
                                     text=True,
-                                    universal_newlines=True)
+                                    universal_newlines=True,
+                                    creationflags=creationflags)
         except FileNotFoundError:
             self.finished.emit(False, "ffmpeg executable not found.")
             return
