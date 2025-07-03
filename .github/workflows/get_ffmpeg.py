@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Download a recent static ffmpeg + ffprobe for the given GitHub OS and drop them
+Download a recent static ffmpeg + ffprobe for the given GitHub OS and drop them
 under externals/<platform>/ so PyInstaller can bundle them.
 
 Invoked from the workflow as:
@@ -31,7 +31,7 @@ else:
 dest_dir.mkdir(parents=True, exist_ok=True)
 
 # ------------------------ download & extract --------------------------------
-print(f"⬇  Fetching static build for {TARGET} …")
+print(f"Download:  Fetching static build for {TARGET} ...")
 fd, tmp_archive = tempfile.mkstemp(suffix=url.split("/")[-1])
 os.close(fd)
 urllib.request.urlretrieve(url, tmp_archive)
@@ -57,4 +57,4 @@ else:  # tar.*
                 out.chmod(0o755)
 
 os.remove(tmp_archive)
-print(f"✅  ffmpeg + ffprobe saved to {dest_dir}")
+print(f"DONE: ffmpeg + ffprobe saved to {dest_dir}")
