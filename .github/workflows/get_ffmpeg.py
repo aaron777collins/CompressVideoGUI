@@ -1,60 +1,71 @@
 #!/usr/bin/env python3
 """
-Download a recent static ffmpeg + ffprobe for the given GitHub OS and drop them
-under externals/<platform>/ so PyInstaller can bundle them.
+Download a recent static ffmpeg + ffprobe for the given GitHub runner OS and
+place them under externals/<platform>/ so PyInstaller can bundle them.
 
-Invoked from the workflow as:
-    python get_ffmpeg.py Windows
-    python get_ffmpeg.py macOS
-    python get_ffmpeg.py Linux
+Called from the workflow step as:
+    python get_ffmpeg.py Windows   | macOS | Linux
 """
-import sys, os, zipfile, tarfile, shutil, tempfile, urllib.request, pathlib, platform, subprocess, json, re
+from __future__ import annotations
+import sys, os, zipfile, tarfile, shutil, tempfile, urllib.request, pathlib, stat
 
+# ---------------------------------------------------------------------------
 TARGET = sys.argv[1]  # "Windows" | "macOS" | "Linux"
 
-# ------------------------ choose URLs ---------------------------------------
 if TARGET == "Windows":
-    url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-    bin_names = ["ffmpeg.exe", "ffprobe.exe"]
-    dest_dir = pathlib.Path("externals/windows")
+    URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+    BIN_NAMES = ["ffmpeg.exe", "ffprobe.exe"]
+    DEST = pathlib.Path("externals/windows")
 elif TARGET == "macOS":
-    url = "https://evermeet.cx/ffmpeg/getrelease/zip"
-    bin_names = ["ffmpeg", "ffprobe"]
-    dest_dir = pathlib.Path("externals/macos")
+    URL = "https://evermeet.cx/ffmpeg/getrelease/zip"
+    BIN_NAMES = ["ffmpeg", "ffprobe"]
+    DEST = pathlib.Path("externals/macos")
 elif TARGET == "Linux":
-    url = "https://johnvansickle.com/ffmpeg/old-releases/ffmpeg-6.1-amd64-static.tar.xz"
-    bin_names = ["ffmpeg", "ffprobe"]
-    dest_dir = pathlib.Path("externals/linux")
+    URL = "https://johnvansickle.com/ffmpeg/old-releases/ffmpeg-6.1-amd64-static.tar.xz"
+    BIN_NAMES = ["ffmpeg", "ffprobe"]
+    DEST = pathlib.Path("externals/linux")
 else:
-    sys.exit(f"Unknown target {TARGET}")
+    sys.exit(f"Unknown target '{TARGET}'")
 
-dest_dir.mkdir(parents=True, exist_ok=True)
+DEST.mkdir(parents=True, exist_ok=True)
+print(f"Fetching static build for {TARGET} ...")
 
-# ------------------------ download & extract --------------------------------
-print(f"Download:  Fetching static build for {TARGET} ...")
-fd, tmp_archive = tempfile.mkstemp(suffix=url.split("/")[-1])
+# ---------------------------------------------------------------------------
+
+fd, tmp_archive = tempfile.mkstemp(suffix=URL.rsplit("/", 1)[-1])
 os.close(fd)
-urllib.request.urlretrieve(url, tmp_archive)
+urllib.request.urlretrieve(URL, tmp_archive)
 
-def pick(member):
-    return any(member.name.endswith(b) or member.name.endswith("/" + b) for b in bin_names)
+def wants(file_path: str) -> bool:
+    """Return True if the basename matches one of BIN_NAMES."""
+    return pathlib.Path(file_path).name in BIN_NAMES
+
+def save_to_dest(stream, name: str) -> None:
+    out_path = DEST / name
+    with open(out_path, "wb") as dst:
+        shutil.copyfileobj(stream, dst)
+    # make executable (best‑effort on Windows)
+    try:
+        os.chmod(out_path, os.stat(out_path).st_mode | stat.S_IEXEC)
+    except OSError:
+        pass
 
 if tmp_archive.endswith(".zip"):
     with zipfile.ZipFile(tmp_archive) as z:
-        for m in z.infolist():
-            if pick(m):
-                out = dest_dir / pathlib.Path(m.filename).name
-                with z.open(m) as src, open(out, "wb") as dst:
-                    shutil.copyfileobj(src, dst)
-                out.chmod(0o755)
+        for member in z.infolist():
+            if member.is_dir():
+                continue
+            if wants(member.filename):
+                with z.open(member) as src:
+                    save_to_dest(src, pathlib.Path(member.filename).name)
 else:  # tar.*
     with tarfile.open(tmp_archive) as t:
-        for m in t.getmembers():
-            if pick(m):
-                out = dest_dir / pathlib.Path(m.name).name
-                with t.extractfile(m) as src, open(out, "wb") as dst:
-                    shutil.copyfileobj(src, dst)
-                out.chmod(0o755)
+        for member in t.getmembers():
+            if not member.isfile():
+                continue
+            if wants(member.name):
+                with t.extractfile(member) as src:
+                    save_to_dest(src, pathlib.Path(member.name).name)
 
 os.remove(tmp_archive)
-print(f"DONE: ffmpeg + ffprobe saved to {dest_dir}")
+print(f"ffmpeg + ffprobe saved to {DEST}")
