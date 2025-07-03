@@ -47,6 +47,9 @@ jobs:
       shell: bash
       run: |
         mkdir -p release
+        pwd
+        ls
+        ls dist
         if [[ "${{ runner.os }}" == "Windows" ]]; then
           mv dist/CompressVideo.exe release/CompressVideo-win.exe
         elif [[ "${{ runner.os }}" == "macOS" ]]; then
